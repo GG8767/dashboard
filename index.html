@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>300U 量化交易戰情室</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body { background-color: #0f172a; color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
         .card { background-color: #1e293b; border: 1px solid #334155; border-radius: 0.75rem; transition: all 0.2s ease; }
@@ -12,7 +13,7 @@
 </head>
 <body class="p-4 sm:p-6 lg:p-8 w-full max-w-[1600px] mx-auto min-h-screen flex flex-col">
 
-    <!-- 頂部標題與狀態（隨視窗自動調整排列） -->
+    <!-- 頂部標題與狀態 -->
     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-6">
         <div>
             <h1 class="text-xl sm:text-2xl lg:text-3xl font-bold text-emerald-400">⚡ OKX 300U 量化戰情室</h1>
@@ -23,7 +24,7 @@
         </button>
     </div>
 
-    <!-- 核心數據卡片（手機 1~2 欄 -> 平板 2 欄 -> 電腦寬螢幕 4 欄自動延展） -->
+    <!-- 核心數據卡片（手機 1 欄 -> 平板 2 欄 -> 電腦寬螢幕 4 欄） -->
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <div class="card p-4 sm:p-5">
             <div class="text-xs sm:text-sm text-slate-400 mb-1">即時總淨值 (USDT)</div>
@@ -45,14 +46,30 @@
             <div class="mt-1">
                 <span id="pos-badge" class="inline-block text-sm sm:text-base px-3 py-1 rounded-md bg-slate-700 text-slate-300 font-medium">檢查中</span>
             </div>
-            <div class="text-xs sm:text-sm text-slate-400 mt-2" id="total-trades-count">累計交易次數: 0 次</div>
+            <div class="text-xs sm:text-sm text-slate-400 mt-2" id="total-trades-count">累計成交筆數: 0 筆</div>
+        </div>
+    </div>
+
+    <!-- 新增：資金淨值走勢折線圖區塊 -->
+    <div class="card p-4 sm:p-5 mb-6">
+        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 mb-4">
+            <div>
+                <h2 class="text-sm sm:text-base font-semibold text-slate-200 flex items-center gap-2">
+                    📈 資金淨值成長曲線 (USDT)
+                </h2>
+                <p class="text-xs text-slate-400 mt-0.5">基準線 300.00 USDT ｜ 串接歷史成交與即時市價動態計算</p>
+            </div>
+            <span class="text-xs px-2.5 py-1 rounded bg-slate-800 text-slate-300 font-mono" id="chart-peak-info">最高淨值: 300.00 U</span>
+        </div>
+        <div class="relative w-full h-56 sm:h-64 lg:h-72">
+            <canvas id="equityChart"></canvas>
         </div>
     </div>
 
     <!-- 主內容區（手機上下堆疊 -> 電腦寬螢幕左右 5:7 比例並排） -->
     <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1">
         
-        <!-- 左側欄（佔 5 格）：持倉明細 + 自主學習參數 -->
+        <!-- 左側欄（佔 5 格）：持倉明細 + 自主學習狀態 -->
         <div class="lg:col-span-5 flex flex-col gap-6">
             <div class="card p-4 sm:p-5">
                 <h2 class="text-sm sm:text-base font-semibold text-slate-200 mb-4 flex items-center gap-2">
@@ -80,11 +97,11 @@
 
             <div class="card p-4 sm:p-5 flex-1">
                 <h2 class="text-sm sm:text-base font-semibold text-slate-200 mb-3 flex items-center gap-2">
-                    🧠 自主學習最新參數
+                    🧠 自主學習引擎狀態
                 </h2>
-                <p class="text-xs text-slate-400 mb-3">系統每日台灣時間 08:00 自動回測近期 K 線並調整最佳參數：</p>
+                <p class="text-xs text-slate-400 mb-3">每日台灣時間 08:00 於私有核心庫自動回測近期 K 線並更新最佳參數（核心參數已加密隔離保護）：</p>
                 <div class="flex flex-wrap gap-2 text-xs sm:text-sm" id="learned-params">
-                    <span class="bg-slate-800 px-3 py-1.5 rounded-lg text-slate-400">尚未產生學習紀錄（預設 EMA 9/21）</span>
+                    <span class="bg-emerald-950/60 border border-emerald-800/50 px-3 py-1.5 rounded-lg text-emerald-400 font-medium">🔒 雙引擎策略＋每日尋優運作中</span>
                 </div>
             </div>
         </div>
@@ -115,14 +132,90 @@
 
     <script>
         const INITIAL_CAPITAL = 300.0;
+        let equityChartInstance = null;
+
+        function renderEquityChart(labels, equityPoints) {
+            const ctx = document.getElementById('equityChart').getContext('2d');
+            const latestEquity = equityPoints[equityPoints.length - 1] || INITIAL_CAPITAL;
+            const isProfit = latestEquity >= INITIAL_CAPITAL;
+            const lineColor = isProfit ? '#34d399' : '#fb7185';
+            const fillColor = isProfit ? 'rgba(52, 211, 153, 0.12)' : 'rgba(251, 113, 133, 0.12)';
+
+            const peakEquity = Math.max(...equityPoints, INITIAL_CAPITAL);
+            document.getElementById('chart-peak-info').innerText = `歷史最高淨值: ${peakEquity.toFixed(2)} U`;
+
+            if (equityChartInstance) {
+                equityChartInstance.data.labels = labels;
+                equityChartInstance.data.datasets[0].data = equityPoints;
+                equityChartInstance.data.datasets[0].borderColor = lineColor;
+                equityChartInstance.data.datasets[0].backgroundColor = fillColor;
+                equityChartInstance.update();
+                return;
+            }
+
+            equityChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: '總淨值 (USDT)',
+                        data: equityPoints,
+                        borderColor: lineColor,
+                        backgroundColor: fillColor,
+                        borderWidth: 2.5,
+                        pointRadius: 3.5,
+                        pointHoverRadius: 6,
+                        pointBackgroundColor: lineColor,
+                        fill: true,
+                        tension: 0.25
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: { mode: 'index', intersect: false },
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: '#0f172a',
+                            titleColor: '#94a3b8',
+                            bodyColor: '#f8fafc',
+                            borderColor: '#334155',
+                            borderWidth: 1,
+                            padding: 10,
+                            callbacks: {
+                                label: function(context) {
+                                    const val = context.parsed.y;
+                                    const diff = val - INITIAL_CAPITAL;
+                                    return ` 總淨值: ${val.toFixed(2)} U (${diff >= 0 ? '+' : ''}${diff.toFixed(2)} U)`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { color: 'rgba(51, 65, 85, 0.35)' },
+                            ticks: { color: '#94a3b8', maxTicksLimit: 8, font: { size: 11 } }
+                        },
+                        y: {
+                            grid: { color: 'rgba(51, 65, 85, 0.35)' },
+                            ticks: {
+                                color: '#94a3b8',
+                                font: { size: 11 },
+                                callback: function(value) { return value.toFixed(1) + ' U'; }
+                            }
+                        }
+                    }
+                }
+            });
+        }
 
         async function loadDashboard() {
             const cacheBuster = `?t=${new Date().getTime()}`;
             try {
-                const [stateRes, okxRes, paramsRes] = await Promise.all([
+                const [stateRes, okxRes] = await Promise.all([
                     fetch('account_state.json' + cacheBuster),
-                    fetch('https://www.okx.com/api/v5/market/ticker?instId=BTC-USDT'),
-                    fetch('strategy_params.json' + cacheBuster).catch(() => null)
+                    fetch('https://www.okx.com/api/v5/market/ticker?instId=BTC-USDT')
                 ]);
 
                 const state = await stateRes.json();
@@ -163,22 +256,47 @@
                     document.getElementById('tp-price').innerText = '--';
                 }
 
-                if (paramsRes && paramsRes.ok) {
-                    const params = await paramsRes.json();
-                    document.getElementById('learned-params').innerHTML = `
-                        <span class="bg-indigo-950 border border-indigo-700/60 px-3 py-1.5 rounded-lg text-indigo-300 font-medium">EMA (${params.fast_ema} / ${params.slow_ema})</span>
-                        <span class="bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-lg text-slate-200">ATR 停損 ${params.atr_sl_mult}x / 停利 ${params.atr_tp_mult}x</span>
-                        ${params.backtest_win_rate ? `<span class="bg-emerald-950/60 border border-emerald-800/50 px-3 py-1.5 rounded-lg text-emerald-400">近期回測勝率 ${params.backtest_win_rate}%</span>` : ''}
-                    `;
-                }
+                // 預設圖表起點與即時終點
+                let chartLabels = ['初始本金', '即時最新'];
+                let chartData = [INITIAL_CAPITAL, parseFloat(equity.toFixed(2))];
 
                 const csvRes = await fetch('trade_history.csv' + cacheBuster);
                 if (csvRes.ok) {
                     const csvText = await csvRes.text();
-                    const rows = csvText.trim().split('\n').slice(1).reverse().slice(0, 20);
-                    if (rows.length > 0 && rows[0] !== '') {
+                    const allRows = csvText.trim().split('\n').slice(1).filter(r => r.trim() !== '');
+
+                    if (allRows.length > 0) {
+                        // 1. 依時間正序重建歷史淨值走勢點
+                        chartLabels = ['初始本金'];
+                        chartData = [INITIAL_CAPITAL];
+                        let runningBtc = 0.0;
+
+                        allRows.forEach(row => {
+                            const cols = row.split(',');
+                            const timeLabel = cols[0].slice(5, 16); // MM-DD HH:MM
+                            const side = cols[1];
+                            const price = parseFloat(cols[3]);
+                            const qty = parseFloat(cols[4]);
+                            const balAfter = parseFloat(cols[8]);
+
+                            if (side === 'BUY') {
+                                runningBtc += qty;
+                            } else if (side === 'SELL') {
+                                runningBtc = 0.0;
+                            }
+                            const pointEquity = balAfter + (runningBtc * price);
+                            chartLabels.push(timeLabel);
+                            chartData.push(parseFloat(pointEquity.toFixed(2)));
+                        });
+
+                        // 接上當下最新即時淨值
+                        chartLabels.push('即時最新');
+                        chartData.push(parseFloat(equity.toFixed(2)));
+
+                        // 2. 更新最新 20 筆歷史成交表格（由新到舊）
+                        const recentRows = [...allRows].reverse().slice(0, 20);
                         const tbody = document.getElementById('trade-table-body');
-                        tbody.innerHTML = rows.map(row => {
+                        tbody.innerHTML = recentRows.map(row => {
                             const cols = row.split(',');
                             const time = cols[0].slice(5, 16);
                             const side = cols[1];
@@ -199,6 +317,9 @@
                         }).join('');
                     }
                 }
+
+                renderEquityChart(chartLabels, chartData);
+
             } catch (err) {
                 console.error('載入失敗:', err);
             }
