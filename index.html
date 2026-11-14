@@ -39,7 +39,7 @@
         <div class="card p-4 sm:p-5">
             <div class="text-xs sm:text-sm text-slate-400 mb-1">OKX 即時市價 (BTC-USDT)</div>
             <div class="text-2xl sm:text-3xl font-bold text-amber-400 font-mono" id="btc-price-live">--</div>
-            <div class="text-xs sm:text-sm text-slate-400 mt-1.5">每 30 秒自動更新報價</div>
+            <div class="text-xs sm:text-sm text-slate-400 mt-1.5">每 3 秒自動更新報價</div>
         </div>
         <div class="card p-4 sm:p-5">
             <div class="text-xs sm:text-sm text-slate-400 mb-1">當前交易狀態</div>
@@ -326,7 +326,7 @@
         }
 
         loadDashboard();
-        setInterval(loadDashboard, 300);
+        setInterval(loadDashboard, 3000);
     </script>
 </body>
 </html>
