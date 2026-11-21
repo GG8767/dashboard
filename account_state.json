@@ -1,10 +1,10 @@
 {
-    "last_update": "2026-11-20 22:52:39",
-    "usdt_balance": 294.5577228021354,
-    "btc_position": 0.0,
-    "entry_price": 0.0,
-    "sl_price": 0.0,
-    "tp_price": 0.0,
-    "total_trades": 12,
-    "layers": 0
+    "last_update": "2026-11-21 03:34:19",
+    "usdt_balance": 191.462519821388,
+    "btc_position": 0.0018112228410550677,
+    "entry_price": 56863.3,
+    "sl_price": 56489.96071428572,
+    "tp_price": 57460.64285714286,
+    "total_trades": 13,
+    "layers": 1
 }
